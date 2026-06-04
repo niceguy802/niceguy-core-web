@@ -1,0 +1,34 @@
+{
+  "name": "niceguy-core-web",
+  "version": "1.0.0",
+  "description": "vue core",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "playground"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/niceguy802/niceguy-core-web.git"
+  },
+  "keywords": [
+    "js",
+    "ts",
+    "vue"
+  ],
+  "author": "niceguy",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/niceguy802/niceguy-core-web/issues"
+  },
+  "homepage": "https://github.com/niceguy802/niceguy-core-web#readme",
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "vite": "^8.0.16",
+    "vitest": "^1.0.0"
+  }
+}
