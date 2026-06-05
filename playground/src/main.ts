@@ -1,11 +1,19 @@
-﻿import { createApp } from 'vue'
-import './style.css'
-import App from './App.vue'
-import { createHttpPlugin } from '@/framework/http'
+import { createApp } from "vue";
+import App from "./App.vue";
+import router from "./router";
+import { createHttpPlugin } from "@sisin/http-client";
 
-const app = createApp(App)
+const app = createApp(App);
 
-// 注册 HTTP 插件，全局可用 this.$url / inject('$url')
-app.use(createHttpPlugin())
+app.use(
+  createHttpPlugin({
+    baseURL: "/api",
+    tokenMode: "cookie",
+    loginEndpoint: "/public/auth/login",
+    refreshEndpoint: "/public/auth/refresh",
+    onReLogin: () => router.push("/login"),
+  })
+);
 
-app.mount('#app')
+app.use(router);
+app.mount("#app");

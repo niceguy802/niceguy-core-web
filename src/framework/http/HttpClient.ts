@@ -54,16 +54,56 @@ export class HttpClient {
     await compose(this.compiledChain!, ctx)
     return (ctx.result ?? ctx.response?.data) as T
   }
-
+  /**
+   * GET请求 - 适用于查询数据等
+   * @param url 地址
+   * @param config 其他配置项 （如 headers、params 等）
+   * @returns 响应数据 
+   */
   get<T = any>(url: string, config?: AxiosRequestConfig) {
     return this.request<T>({ ...config, url, method: 'GET' })
   }
-
+  /**
+   * POST请求 - 适用于表单提交、JSON数据等
+   * @param url 地址
+   * @param data 请求数据
+   * @param config 其他配置项 （如 headers、params 等）
+   * @returns 响应数据
+   */
   post<T = any>(
     url: string,
     data?: any,
     config?: AxiosRequestConfig
   ) {
     return this.request<T>({ ...config, url, data, method: 'POST' })
+  }
+  /**
+   * PATCH请求 - 适用于部分更新数据等
+   * @param url 地址
+   * @param data 请求数据
+   * @param config 其他配置项 （如 headers、params 等）
+   * @returns 响应数据
+   */
+  patch<T = any>(url: string, data?: any, config?: AxiosRequestConfig) {
+    return this.request<T>({ ...config, url, data, method: 'PATCH' })
+  }
+  /**
+   * PUT请求 - 适用于完全更新数据等
+   * @param url 地址
+   * @param data 请求数据
+   * @param config 其他配置项 （如 headers、params 等）
+   * @returns 响应数据
+   */
+  put<T = any>(url: string, data?: any, config?: AxiosRequestConfig) {
+    return this.request<T>({ ...config, url, data, method: 'PUT' })
+  }
+  /**
+   * DELETE请求 - 适用于删除数据等
+   * @param url 地址
+   * @param config 其他配置项 （如 headers、params 等）
+   * @returns 响应数据
+   */
+  delete<T = any>(url: string, config?: AxiosRequestConfig) {
+    return this.request<T>({ ...config, url, method: 'DELETE' })
   }
 }

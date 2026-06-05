@@ -5,9 +5,9 @@ import { HttpStatusMiddleware } from './middlewares/HttpStatusMiddleware'
 import { ResponseTransformMiddleware } from './middlewares/ResponseTransformMiddleware'
 import { createAuthMiddleware } from './middlewares/AuthMiddleware'
 import { createDeviceMiddleware } from './middlewares/DeviceMiddleware'
-import { createRefreshTokenMiddleware } from './middlewares/RefreshTokenMiddleware'
+import { createRefreshTokenMiddleware, RefreshTokenOptions } from './middlewares/RefreshTokenMiddleware'
 import { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY } from './constants'
-import type { ApiResponse } from './types'
+import type { ApiResponse, HttpMiddleware } from './types'
 
 // ===== 类型导出 =====
 export { compose } from './compose'
@@ -51,7 +51,9 @@ export interface CreateHttpClientOptions {
    */
   auth?: boolean | (() => string | null)
   /** 是否启用 401 自动刷新，默认 true */
-  refresh?: boolean
+  refresh?: boolean | RefreshTokenOptions   // 支持全量覆盖
+  middlewares?: HttpMiddleware[]            // 用户自定义中间件
+  axiosConfig?: Omit<AxiosRequestConfig, 'baseURL' | 'timeout'>  // 透传 axios 原生配置
 }
 
 /**

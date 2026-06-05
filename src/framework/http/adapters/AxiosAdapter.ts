@@ -1,11 +1,11 @@
 ﻿import axios from 'axios'
-import type { AxiosRequestConfig, AxiosResponse } from 'axios'
+import type { AxiosRequestConfig, AxiosResponse, AxiosInstance } from 'axios'
 import { NetworkError } from '../errors'
 
 export class AxiosAdapter {
-  private axiosInstance: any
+  private axiosInstance: AxiosInstance
 
-  constructor(instance: any) {
+  constructor(instance: AxiosInstance) {
     this.axiosInstance = instance
   }
 

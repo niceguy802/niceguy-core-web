@@ -8,18 +8,19 @@
     "playground"
   ],
   "scripts": {
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "test": "npm test -w packages/http-client",
+    "build": "npm run build -w packages/http-client",
+    "release:patch": "npm run release:patch -w packages/http-client",
+    "release:minor": "npm run release:minor -w packages/http-client",
+    "release:major": "npm run release:major -w packages/http-client",
+    "changeset": "npx changeset",
+    "changeset:version": "npx changeset version"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/niceguy802/niceguy-core-web.git"
   },
-  "keywords": [
-    "js",
-    "ts",
-    "vue"
-  ],
+  "keywords": ["js", "ts", "vue"],
   "author": "niceguy",
   "license": "ISC",
   "bugs": {
@@ -27,6 +28,7 @@
   },
   "homepage": "https://github.com/niceguy802/niceguy-core-web#readme",
   "devDependencies": {
+    "@changesets/cli": "^2.31.0",
     "typescript": "^6.0.3",
     "vite": "^8.0.16",
     "vitest": "^1.0.0"
