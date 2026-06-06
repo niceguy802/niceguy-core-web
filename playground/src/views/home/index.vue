@@ -1,21 +1,21 @@
 ﻿<script setup lang="ts">
 import { ref, reactive } from "vue";
 import { useRouter } from "vue-router";
-import { createHttpClient, HttpClient, URL_KEY, createRetryMiddleware, createAuthMiddleware, ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY } from "@sisin/http-client";
-import { createHttpClient as createLocalHttp, type ApiResponse } from "@/framework/http";
-import {
-  login, getUserInfo, refreshAuthToken, logout,
-  getAccessToken, getRefreshToken
-} from "@/framework/auth";
+import { HttpClient, createRetryMiddleware, createAuthMiddleware } from "@sisin/http-client";
+import { loginApi, getUserInfoApi, refreshTokenApi, getTokenStatus, clearTokens } from "../../api/common";
 
 const router = useRouter();
 
-// ---- $url（由 createHttpPlugin 注入，所有中间件已内置） ----
-// 使用 inject 需要通过 provide，这里直接创建测试实例
-const $url = createLocalHttp();
+// ---- Auth 状态 ----
+function refreshAuthStatus() {
+  const st = getTokenStatus();
+  authStatus.accessToken = st.accessToken ? st.accessToken.substring(0, 20) + "..." : "(无)";
+  authStatus.refreshToken = st.refreshToken ? st.refreshToken.substring(0, 20) + "..." : "(无)";
+  authStatus.loggedIn = st.loggedIn;
+}
 
-// ---- 裸 HttpClient 实例（无中间件，用于 jsonplaceholder 测试） ----
-const http = new HttpClient({ baseURL: "https://jsonplaceholder.typicode.com", timeout: 10000 });
+// ---- 基础测试客户端（裸 HttpClient，无中间件，用于 jsonplaceholder 测试）----
+const jsonHttp = new HttpClient({ baseURL: "https://jsonplaceholder.typicode.com", timeout: 10000 });
 
 // ---- 完整中间件链实例 ----
 const httpFull = new HttpClient({ baseURL: "https://jsonplaceholder.typicode.com", timeout: 10000 });
@@ -26,18 +26,9 @@ const result = ref("");
 const loading = ref(false);
 const logs = reactive<string[]>([]);
 
-// ---- Auth 状态 ----
 const authStatus = reactive({
   loggedIn: false, username: "", accessToken: "", refreshToken: ""
 });
-
-function refreshAuthStatus() {
-  const at = getAccessToken();
-  const rt = getRefreshToken();
-  authStatus.accessToken = at ? at.substring(0, 20) + "..." : "(无)";
-  authStatus.refreshToken = rt ? rt.substring(0, 20) + "..." : "(无)";
-  authStatus.loggedIn = !!at;
-}
 refreshAuthStatus();
 
 // hijack console.log
@@ -50,21 +41,21 @@ console.log = (...args: any[]) => {
 // ---- 基础功能测试 ----
 async function testGet() {
   loading.value = true; result.value = "";
-  try { result.value = JSON.stringify(await http.get("/posts/1"), null, 2); }
+  try { result.value = JSON.stringify(await jsonHttp.get("/posts/1"), null, 2); }
   catch (e: any) { result.value = "ERROR: " + e.message; }
   finally { loading.value = false; }
 }
 
 async function testPost() {
   loading.value = true; result.value = "";
-  try { result.value = JSON.stringify(await http.post("/posts", { title: "foo", body: "bar", userId: 1 }), null, 2); }
+  try { result.value = JSON.stringify(await jsonHttp.post("/posts", { title: "foo", body: "bar", userId: 1 }), null, 2); }
   catch (e: any) { result.value = "ERROR: " + e.message; }
   finally { loading.value = false; }
 }
 
 async function testError() {
   loading.value = true; result.value = "";
-  try { await http.get("/posts/99999"); }
+  try { await jsonHttp.get("/posts/99999"); }
   catch (e: any) { result.value = "ERROR: " + e.message; }
   finally { loading.value = false; }
 }
@@ -110,11 +101,11 @@ async function testDoubleNextGuard() {
   finally { loading.value = false; }
 }
 
-// ---- 本地后端测试 ----
+// ---- 本地后端测试（通过 api 模块统一调用）----
 async function testLogin() {
   loading.value = true; result.value = "";
   try {
-    const data = await login("admin", "123456");
+    const data = await loginApi({ username: "admin", password: "123456" });
     result.value = JSON.stringify(data, null, 2);
     logs.push("[Auth] 登录成功"); refreshAuthStatus();
   } catch (e: any) { result.value = "登录失败: " + e.message; logs.push("[Auth] 登录失败"); }
@@ -123,19 +114,29 @@ async function testLogin() {
 
 async function testGetUserInfo() {
   loading.value = true; result.value = "";
-  try { result.value = JSON.stringify(await getUserInfo(), null, 2); logs.push("[Auth] 获取用户信息成功"); }
-  catch (e: any) { result.value = "失败: " + e.message; }
+  try {
+    result.value = JSON.stringify(await getUserInfoApi(), null, 2);
+    logs.push("[Auth] 获取用户信息成功");
+  } catch (e: any) { result.value = "失败: " + e.message; }
   finally { loading.value = false; }
 }
 
 async function testRefreshAuth() {
   loading.value = true; result.value = "";
-  try { result.value = "新 token: " + await refreshAuthToken(); logs.push("[Auth] 刷新成功"); refreshAuthStatus(); }
-  catch (e: any) { result.value = "刷新失败: " + e.message; }
+  try {
+    const data = await refreshTokenApi();
+    result.value = "刷新成功: " + JSON.stringify(data);
+    logs.push("[Auth] 刷新成功"); refreshAuthStatus();
+  } catch (e: any) { result.value = "刷新失败: " + e.message; }
   finally { loading.value = false; }
 }
 
-function testLogout() { logout(); result.value = "已登出"; logs.push("[Auth] 已登出"); refreshAuthStatus(); }
+function testLogout() {
+  clearTokens();
+  result.value = "已登出";
+  logs.push("[Auth] 已登出");
+  refreshAuthStatus();
+}
 
 function clearLogs() { logs.splice(0, logs.length); }
 </script>
@@ -154,7 +155,6 @@ function clearLogs() { logs.splice(0, logs.length); }
       <button :disabled="loading" @click="testOnionOrder">Onion Order</button>
       <button :disabled="loading" @click="testDoubleNextGuard">Double next Guard</button>
       <button :disabled="loading" @click="testRetry">Retry</button>
-      <button :disabled="loading" @click="testFullChain">Full Chain</button>
       <button @click="clearLogs">Clear Logs</button>
     </div>
 

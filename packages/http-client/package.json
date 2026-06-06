@@ -1,6 +1,6 @@
 {
   "name": "@sisin/http-client",
-  "version": "0.2.2",
+  "version": "0.2.9",
   "description": "A elegant axios wrapper with onion-model middleware for Vue/React",
   "type": "module",
   "main": "./dist/index.cjs",

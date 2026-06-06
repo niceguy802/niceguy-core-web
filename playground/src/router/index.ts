@@ -1,5 +1,5 @@
 ﻿import { createRouter, createWebHistory } from "vue-router";
-import { ACCESS_TOKEN_KEY } from "@sisin/http-client";
+import { ACCESS_TOKEN_KEY, buildStorageKey } from "@sisin/http-client";
 
 const routes = [
   {
@@ -22,7 +22,7 @@ const router = createRouter({
 
 // 路由守卫：未登录跳转登录页
 router.beforeEach((to, _from, next) => {
-  const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+  const token = localStorage.getItem(buildStorageKey(ACCESS_TOKEN_KEY));
   if (to.meta.requiresAuth && !token) {
     next("/login");
   } else if (to.path === "/login" && token) {

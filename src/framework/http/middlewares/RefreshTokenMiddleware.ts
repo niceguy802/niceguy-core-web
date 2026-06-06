@@ -1,66 +1,136 @@
-﻿// token 刷新中间件：捕获 401 → 刷新 token → 更新请求头 → 重试
-import type { HttpContext, HttpMiddleware } from '../types'
-import { AuthError } from '../errors'
+﻿// ── token 刷新中间件 ──
+// 捕获 AuthError（HTTP 401）和 BusinessError（业务码 40101）→ 刷新 token → 重试
+// 其他 401xx/40301 业务码直接跳转登录
+
+import type { HttpContext, HttpMiddleware } from '../types';
+import { AuthError, BusinessError } from '../errors';
+
+// ── 错误码判断 ──
+
+/** 需要刷新 accessToken 的业务状态码 */
+const REFRESH_CODES = [40101];
+
+/** 需要重新登录的业务状态码 */
+const RELOGIN_CODES = [401, 40102, 40103, 40104, 40301];
+
+/** 判断 BusinessError 是否因 token 过期（可刷新） */
+const isRefreshableError = (error: unknown): boolean => {
+  if (error instanceof BusinessError) {
+    const code = Number(error.code);
+    return REFRESH_CODES.includes(code) || RELOGIN_CODES.includes(code);
+  }
+  return false;
+};
+
+/** 判断 BusinessError 是否要求重新登录 */
+const isReLoginError = (error: unknown): boolean => {
+  if (error instanceof BusinessError) {
+    return RELOGIN_CODES.includes(Number(error.code));
+  }
+  return false;
+};
+
+// ── Options ──
 
 export interface RefreshTokenOptions {
   /** 获取当前 refreshToken */
-  getRefreshToken: () => string | null
+  getRefreshToken: () => string | null;
   /** 执行刷新，返回新的 accessToken */
-  refreshToken: () => Promise<string>
+  refreshToken: () => Promise<string>;
   /** 刷新成功回调 */
-  onRefreshSuccess?: (newToken: string) => void
+  onRefreshSuccess?: (newToken: string) => void;
   /** 刷新失败回调 */
-  onRefreshError?: (error: unknown) => void
+  onRefreshError?: (error: unknown) => void;
+  /** 需要重新登录时的回调（如跳转登录页） */
+  onReLogin?: () => void;
+  /** 登录页 URL，onReLogin 未设置时默认跳转此路径 */
+  loginPageUrl?: string;
+  /** 最大重试次数（防止死循环），默认 1 */
+  maxRetries?: number;
 }
+
+// ── Middleware ──
 
 export const createRefreshTokenMiddleware = (
   options: RefreshTokenOptions
 ): HttpMiddleware => {
-  // 防止并发刷新（多个请求同时 401 时只刷新一次）
-  let pendingRefresh: Promise<string> | null = null
+  const { maxRetries = 1, loginPageUrl = '/login' } = options;
+
+  // 跨请求共享的刷新 Promise（防止并发刷新）
+  let pendingRefresh: Promise<string> | null = null;
+
+  /** 触发重新登录：调用 onReLogin / 跳转登录页 */
+  const triggerReLogin = () => {
+    options.onRefreshError?.(new Error('登录已过期，请重新登录'));
+    options.onReLogin?.();
+    if (!options.onReLogin && typeof window !== 'undefined') {
+      if (window.location.pathname !== loginPageUrl) {
+        window.location.href = loginPageUrl;
+      }
+    }
+  };
 
   return async (ctx: HttpContext, next: () => Promise<void>) => {
     try {
-      await next()
+      await next();
     } catch (error) {
-      if (!(error instanceof AuthError)) {
-        throw error
+      // ── 判断是否需要进入刷新流程 ──
+
+      const isAuthErr = error instanceof AuthError;
+      const isBizAuthErr = isRefreshableError(error);
+
+      if (!isAuthErr && !isBizAuthErr) {
+        throw error; // 非认证错误 → 透传
       }
 
-      // 401 → 尝试刷新 token
-      const refreshToken = options.getRefreshToken()
-      if (!refreshToken) {
-        throw error
+      // ── 检查是否有 refreshToken ──
+
+      const refreshTokenStr = options.getRefreshToken();
+      if (!refreshTokenStr && isAuthErr) {
+        triggerReLogin();
+        throw error;
       }
+
+      // ── 业务码判断：40101 才需刷新，其他 401xx 直接重新登录 ──
+
+      if (isBizAuthErr && isReLoginError(error)) {
+        triggerReLogin();
+        throw error;
+      }
+
+      // ── 执行刷新（或等待正在进行的刷新）──
 
       try {
-        // 多个并发请求共享同一个刷新 Promise
         if (!pendingRefresh) {
           pendingRefresh = options.refreshToken().finally(() => {
-            pendingRefresh = null
-          })
+            pendingRefresh = null;
+          });
         }
 
-        const newToken = await pendingRefresh
-        options.onRefreshSuccess?.(newToken)
+        const newToken = await pendingRefresh;
+        options.onRefreshSuccess?.(newToken);
 
-        // 更新请求头的 token
+        // 更新当前请求的 Authorization
         if (ctx.config.headers) {
-          (ctx.config.headers as Record<string, string>).Authorization = `Bearer ${newToken}`
+          (ctx.config.headers as Record<string, string>).Authorization =
+            `Bearer ${newToken}`;
         } else {
-          ctx.config.headers = { Authorization: `Bearer ${newToken}` } as any
+          ctx.config.headers = {
+            Authorization: `Bearer ${newToken}`,
+          } as never;
         }
 
-        // 用赋值代替 delete → 避免 V8 对象降级
-        ctx.response = undefined
-        ctx.result = undefined
+        // 清空结果，允许 retry 重新填充
+        ctx.response = undefined;
+        ctx.result = undefined;
 
         // 重试
-        await next()
+        await next();
       } catch (refreshError) {
-        options.onRefreshError?.(refreshError)
-        throw error
+        // 刷新失败 → 重新登录
+        triggerReLogin();
+        throw error;
       }
     }
-  }
-}
+  };
+};

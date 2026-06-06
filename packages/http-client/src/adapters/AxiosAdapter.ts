@@ -1,4 +1,5 @@
-﻿import type { AxiosRequestConfig, AxiosResponse } from "axios";
+﻿// 请求适配器 
+import type { AxiosRequestConfig, AxiosResponse } from "axios";
 import axios from "axios";
 import { NetworkError } from "../errors";
 

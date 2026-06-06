@@ -1,9 +1,9 @@
-import type { HttpContext, HttpMiddleware } from "../types";
+﻿import type { HttpContext, HttpMiddleware } from "../types";
 import { AuthError, BusinessError, HttpError, NetworkError } from "../errors";
 
 // ── 错误码判断 ──
 
-/** 需要刷新 token 的业务状态码（accessToken 过期） */
+/** 需要刷新 accessToken 的业务状态码（accessToken 过期）*/
 const REFRESH_CODES = [40101];
 
 /** 需要重新登录的业务状态码 */
@@ -39,10 +39,12 @@ export interface RefreshTokenOptions {
   onRefreshError?: (error: unknown) => void;
   /** 需要重新登录时的回调（如跳转登录页） */
   onReLogin?: () => void;
-  /** 登录页 URL（onReLogin 未设置时，默认跳转此路径） */
+  /** 登录页 URL，onReLogin 未设置时默认跳转此路径 */
   loginPageUrl?: string;
   /** 最大重试次数（防止死循环），默认 1 */
   maxRetries?: number;
+  /** cookie 模式：refreshToken 由 HTTP-only cookie 管理，跳过 getRefreshToken 的 null 检查 */
+  cookieModeRefresh?: boolean;
 }
 
 // ── Middleware ──
@@ -85,23 +87,25 @@ export const createRefreshTokenMiddleware = (
         throw error; // 非认证错误 → 透传
       }
 
-      // ── 检查是否有 refreshToken（仅 localStorage 模式） ──
+      // ── 检查是否有 refreshToken（仅 localStorage 模式需要）──
+      // cookie 模式：refreshToken 由 HTTP-only cookie 管理，浏览器自动发送，
+      // 无需在 JavaScript 中检查，因此跳过此判断
 
       const refreshToken = options.getRefreshToken();
-      if (!refreshToken && isAuthErr) {
+      if (!refreshToken && isAuthErr && !options.cookieModeRefresh) {
         // localStorage 模式且没有 refreshToken → 直接重新登录
         triggerReLogin();
         throw error;
       }
 
-      // ── 业务码判断：40101 才需要刷新，其他 401xx 直接重新登录 ──
+      // ── 业务码判断：40101 才需刷新，其他 401xx 直接重新登录 ──
 
       if (isBizAuthErr && isReLoginError(error)) {
         triggerReLogin();
         throw error;
       }
 
-      // ── 执行刷新（或等待正在进行的刷新） ──
+      // ── 执行刷新（或等待正在进行的刷新）──
 
       try {
         if (!pendingRefresh) {
@@ -127,7 +131,7 @@ export const createRefreshTokenMiddleware = (
         ctx.response = undefined;
         ctx.result = undefined;
 
-        // 重试原请求
+        // 重试
         await next();
       } catch (refreshError) {
         // 刷新失败 → 需要重新登录

@@ -1,4 +1,4 @@
-import type { AxiosRequestConfig } from "axios";
+﻿import type { AxiosRequestConfig } from "axios";
 import { HttpClient } from "./HttpClient";
 import { HttpStatusMiddleware } from "./middlewares/HttpStatusMiddleware";
 import { ResponseTransformMiddleware } from "./middlewares/ResponseTransformMiddleware";
@@ -8,10 +8,7 @@ import { createDeviceMiddleware } from "./middlewares/DeviceMiddleware";
 import { createRefreshTokenMiddleware } from "./middlewares/RefreshTokenMiddleware";
 import { createAuthResponseMiddleware } from "./middlewares/AuthResponseMiddleware";
 import type { ErrorHandler } from "./middlewares/ErrorMiddleware";
-import type { AuthResponseOptions } from "./middlewares/AuthResponseMiddleware";
-import { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, URL_KEY } from "./constants";
 import type { ApiResponse } from "./types";
-import type { InjectionKey } from "vue";
 import { TokenManager } from "./TokenManager";
 import type { TokenMode, TokenStorageConfig } from "./TokenManager";
 
@@ -55,7 +52,7 @@ export type {
   HttpInterceptor,
 } from "./types";
 
-export { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, URL_KEY } from "./constants";
+export { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, URL_KEY, buildStorageKey } from "./constants";
 export { createHttpPlugin } from "./vue-plugin";
 
 // ── 创建 HttpClient 实例 ──
@@ -196,7 +193,7 @@ export function createHttpClient(
         refreshToken:
           refreshOptions?.refreshToken ??
           (async () => {
-            const res = await refreshClient.get<ApiResponse<string>>(
+            const res = await refreshClient.post<ApiResponse<string>>(
               refreshEndpoint ?? "/public/auth/refresh"
             );
             return res.data;
@@ -211,13 +208,14 @@ export function createHttpClient(
           (() => {
             tokenManager.clearAll();
           }),
+        cookieModeRefresh: tokenMode === "cookie",
         onReLogin,
         loginPageUrl,
       })
     );
   }
 
-  // ── 洋葱模型外层 2：AuthResponse（自动保存 token） ──
+  // ── 洋葱模型外层 2：AuthResponse（自动保存 token）──
   if (loginEndpoint || refreshEndpoint) {
     client.use(
       createAuthResponseMiddleware({
@@ -245,3 +243,89 @@ export function createHttpClient(
 
   return client;
 }
+
+// ── 应用启动时验证 token 有效性 ──
+
+export interface VerifyAuthOptions {
+  /** 请求基础路径，默认 "/api" */
+  baseURL?: string;
+  /** 刷新端点，默认 "/public/auth/refresh" */
+  refreshEndpoint?: string;
+  /** 登录页 URL，刷新失败时跳转 */
+  loginPageUrl?: string;
+  /** token 管理模式，默认 "localStorage" */
+  tokenMode?: TokenMode;
+  /** 透传 axios 配置 */
+  axiosConfig?: AxiosRequestConfig;
+}
+
+/**
+ * 应用启动时验证 token 有效性
+ *
+ * - 在 localStorage 模式下：读取 refreshToken 发起刷新，成功则更新 accessToken
+ * - 在 cookie 模式下：浏览器自动携带 HTTP-only cookie，刷新成功则更新 accessToken
+ * - 刷新失败时自动清除 token 并跳转登录页
+ *
+ * 推荐在 main.ts 中调用：
+ * ```ts
+ * const ok = await verifyAuth({ tokenMode: "cookie" })
+ * if (!ok) {  redirect to login  }
+ * app.mount("#app")
+ * ```
+ * @returns true 表示 token 有效（已刷新或无需刷新），false 表示需要重新登录
+ */
+export async function verifyAuth(
+  options: VerifyAuthOptions = {}
+): Promise<boolean> {
+  const {
+    baseURL = "/api",
+    refreshEndpoint = "/public/auth/refresh",
+    loginPageUrl = "/login",
+    tokenMode = "localStorage",
+    axiosConfig,
+  } = options;
+
+  const tokenManager = new TokenManager({ mode: tokenMode });
+
+  const refreshClient = new HttpClient({ baseURL, ...axiosConfig });
+
+  // localStorage 模式：手动注入 refreshToken
+  if (tokenMode === "localStorage") {
+    const rt = tokenManager.getRefreshToken();
+    if (!rt) {
+      // 无 refreshToken 且无 accessToken → 未登录，无需跳转
+      if (!tokenManager.getAccessToken()) return false;
+      // 有 accessToken 但无 refreshToken → 无法刷新，清除 accessToken
+      tokenManager.removeAccessToken();
+      return false;
+    }
+    // 手动注入 refreshToken 到请求头
+    refreshClient.use(createAuthMiddleware(() => rt));
+  }
+  // cookie 模式：无需手动注入，浏览器自动携带 cookie
+
+  refreshClient.use(createErrorMiddleware());
+  refreshClient.use(ResponseTransformMiddleware);
+  refreshClient.use(HttpStatusMiddleware);
+  refreshClient.use(createDeviceMiddleware(() => "pc"));
+
+  try {
+    const res = await refreshClient.post(refreshEndpoint);
+    const newToken = (res as any)?.data;
+    if (newToken) {
+      tokenManager.setAccessToken(newToken);
+      return true;
+    }
+    return false;
+  } catch {
+    tokenManager.clearAll();
+    if (
+      typeof window !== "undefined" &&
+      window.location.pathname !== loginPageUrl
+    ) {
+      window.location.href = loginPageUrl;
+    }
+    return false;
+  }
+}
+

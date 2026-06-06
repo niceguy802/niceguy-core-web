@@ -133,4 +133,68 @@ export function createHttpClient(options: CreateHttpClientOptions = {}) {
 
   return client
 }
+// ── 应用启动时验证 token 有效性 ──
 
+/**
+ * 应用启动时验证 token 有效性，确保过期 token 不会进入首页
+ *
+ * - 有 accessToken → 尝试调用刷新接口获取新 token
+ * - 刷新成功 → 更新 localStorage 中的 accessToken，返回 true
+ * - 无 refreshToken / 刷新失败 → 清除 token，跳转登录页，返回 false
+ *
+ * 推荐在 main.ts 或 router.beforeEach 中使用：
+ * ```ts
+ * import { verifyAuth } from '@/framework/http'
+ * await verifyAuth()
+ * app.mount('#app')
+ * ```
+ */
+export async function verifyAuth(options?: {
+  loginPageUrl?: string
+  baseURL?: string
+}): Promise<boolean> {
+  const { loginPageUrl = '/login', baseURL = '/api' } = options || {}
+
+  /** 安全读取 localStorage */
+  const getLocalStorage = (key: string): string | null => {
+    try { return window.localStorage.getItem(key) }
+    catch { return null }
+  }
+
+  // 没有 accessToken → 无需验证
+  const accessToken = getLocalStorage(ACCESS_TOKEN_KEY)
+  if (!accessToken) return false
+
+  const refreshToken = getLocalStorage(REFRESH_TOKEN_KEY)
+  if (!refreshToken) {
+    window.localStorage.removeItem(ACCESS_TOKEN_KEY)
+    if (typeof window !== 'undefined' && window.location.pathname !== loginPageUrl) {
+      window.location.href = loginPageUrl
+    }
+    return false
+  }
+
+  // 尝试用 refreshToken 刷新
+  const refreshClient = new HttpClient({ baseURL })
+  refreshClient.use(ErrorMiddleware)
+  refreshClient.use(HttpStatusMiddleware)
+  refreshClient.use(ResponseTransformMiddleware)
+  refreshClient.use(createAuthMiddleware(() => refreshToken))
+
+  try {
+    const res = await refreshClient.get('/public/auth/refresh')
+    const newToken = (res as any)?.data
+    if (newToken) {
+      window.localStorage.setItem(ACCESS_TOKEN_KEY, newToken)
+      return true
+    }
+    return false
+  } catch {
+    window.localStorage.removeItem(ACCESS_TOKEN_KEY)
+    window.localStorage.removeItem(REFRESH_TOKEN_KEY)
+    if (typeof window !== 'undefined' && window.location.pathname !== loginPageUrl) {
+      window.location.href = loginPageUrl
+    }
+    return false
+  }
+}

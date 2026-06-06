@@ -1,7 +1,7 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref } from "vue";
 import { useRouter } from "vue-router";
-import { createHttpClient } from "@sisin/http-client";
+import { loginApi } from "../../api/common";
 
 const router = useRouter();
 const username = ref("admin");
@@ -9,22 +9,12 @@ const password = ref("123456");
 const loading = ref(false);
 const errorMsg = ref("");
 
-// 独立的登录专用 http（设置 tokenMode: cookie，不依赖 localStorage refreshToken）
-const http = createHttpClient({
-  baseURL: "/api",
-  tokenMode: "cookie",
-  loginEndpoint: "/public/auth/login",
-});
-
 async function handleLogin() {
   loading.value = true;
   errorMsg.value = "";
   try {
     // AuthResponseMiddleware 自动保存 accessToken
-    const res = await http.post("/public/auth/login", {
-      username: username.value,
-      password: password.value,
-    });
+    const res = await loginApi({ username: username.value, password: password.value });
     console.log("[Login] 登录成功", res);
     router.push("/");
   } catch (e: any) {
