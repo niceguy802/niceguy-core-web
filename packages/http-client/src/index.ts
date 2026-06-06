@@ -10,7 +10,7 @@ import { createAuthResponseMiddleware } from "./middlewares/AuthResponseMiddlewa
 import type { ErrorHandler } from "./middlewares/ErrorMiddleware";
 import type { ApiResponse } from "./types";
 import { TokenManager } from "./TokenManager";
-import type { TokenMode, TokenStorageConfig } from "./TokenManager";
+import type { TokenMode } from "./TokenManager";
 
 // ── 类型导出 ──
 
@@ -145,7 +145,7 @@ export function createHttpClient(
     refresh = true,
     refreshOptions,
     onError,
-    tokenMode = "localStorage",
+    tokenMode = "memory",
     loginEndpoint,
     refreshEndpoint,
     tokenKeys,
@@ -208,7 +208,7 @@ export function createHttpClient(
           (() => {
             tokenManager.clearAll();
           }),
-        cookieModeRefresh: tokenMode === "cookie",
+        cookieModeRefresh: tokenMode === "cookie" || tokenMode === "memory",
         onReLogin,
         loginPageUrl,
       })
@@ -268,7 +268,7 @@ export interface VerifyAuthOptions {
  *
  * 推荐在 main.ts 中调用：
  * ```ts
- * const ok = await verifyAuth({ tokenMode: "cookie" })
+ * const ok = await verifyAuth({ tokenMode: "memory" })
  * if (!ok) {  redirect to login  }
  * app.mount("#app")
  * ```
@@ -281,7 +281,7 @@ export async function verifyAuth(
     baseURL = "/api",
     refreshEndpoint = "/public/auth/refresh",
     loginPageUrl = "/login",
-    tokenMode = "localStorage",
+    tokenMode = "memory",
     axiosConfig,
   } = options;
 
@@ -302,7 +302,7 @@ export async function verifyAuth(
     // 手动注入 refreshToken 到请求头
     refreshClient.use(createAuthMiddleware(() => rt));
   }
-  // cookie 模式：无需手动注入，浏览器自动携带 cookie
+  // cookie / memory 模式：无需手动注入，浏览器自动携带 cookie
 
   refreshClient.use(createErrorMiddleware());
   refreshClient.use(ResponseTransformMiddleware);

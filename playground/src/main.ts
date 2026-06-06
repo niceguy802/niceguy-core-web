@@ -5,13 +5,14 @@ import { http } from "./utils/http";
 import { URL_KEY, verifyAuth } from "@sisin/http-client";
 
 // 启动时验证 token 有效性
-// - cookie 模式下，浏览器自动携带 refreshToken cookie，刷新成功则更新 accessToken
+// - memory 模式下，refreshToken 由后端 HTTP-only cookie 管理
 // - 刷新失败（refreshToken 也过期）则自动跳转登录页
+// - 注意：memory 模式页面刷新后 accessToken 丢失，verifyAuth 会通过 cookie 刷新获取新 accessToken
 verifyAuth({
   baseURL: "/api",
   refreshEndpoint: "/public/auth/refresh",
   loginPageUrl: "/login",
-  tokenMode: "cookie",
+  tokenMode: "memory",
 });
 
 const app = createApp(App);

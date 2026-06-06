@@ -1,4 +1,4 @@
-import type { App, InjectionKey } from "vue";
+﻿import type { App, InjectionKey } from "vue";
 import { HttpClient } from "./HttpClient";
 import { createHttpClient } from "./index";
 import { URL_KEY } from "./constants";
@@ -9,7 +9,7 @@ export interface HttpPluginOptions {
   device?: string;
   auth?: boolean | (() => string | null);
   refresh?: boolean;
-  tokenMode?: "localStorage" | "cookie";
+  tokenMode?: "localStorage" | "cookie" | "memory";
   loginEndpoint?: string;
   refreshEndpoint?: string;
   onReLogin?: () => void;

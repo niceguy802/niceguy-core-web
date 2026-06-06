@@ -1,18 +1,17 @@
 ﻿<script setup lang="ts">
 import { useRouter } from "vue-router";
-import { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, buildStorageKey } from "@sisin/http-client";
+import { tokenManager, getTokenStatus } from "./utils/http";
 import { ref, watch } from "vue";
 
 const router = useRouter();
-const loggedIn = ref(!!localStorage.getItem(buildStorageKey(ACCESS_TOKEN_KEY)));
+const loggedIn = ref(getTokenStatus().loggedIn);
 
 watch(router.currentRoute, () => {
-  loggedIn.value = !!localStorage.getItem(buildStorageKey(ACCESS_TOKEN_KEY));
+  loggedIn.value = getTokenStatus().loggedIn;
 });
 
 function doLogout() {
-  localStorage.removeItem(buildStorageKey(ACCESS_TOKEN_KEY));
-  localStorage.removeItem(buildStorageKey(REFRESH_TOKEN_KEY));
+  tokenManager.clearAll();
   loggedIn.value = false;
   router.push("/login");
 }
