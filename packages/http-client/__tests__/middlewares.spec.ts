@@ -1,6 +1,5 @@
 ﻿import { describe, expect, it, vi } from "vitest";
 import { createAuthMiddleware } from "../src/middlewares/AuthMiddleware";
-import { createDeviceMiddleware } from "../src/middlewares/DeviceMiddleware";
 import { createRefreshTokenMiddleware } from "../src/middlewares/RefreshTokenMiddleware";
 import { createRetryMiddleware } from "../src/middlewares/RetryMiddleware";
 import { createErrorMiddleware } from "../src/middlewares/ErrorMiddleware";
@@ -32,17 +31,6 @@ describe("AuthMiddleware", () => {
     const mw = createAuthMiddleware(() => null);
     await mw(ctx, async () => {});
     expect(ctx.config.headers?.Authorization).toBeUndefined();
-  });
-});
-
-// ── DeviceMiddleware ──
-
-describe("DeviceMiddleware", () => {
-  it("should inject X-Device header", async () => {
-    const ctx = createCtx();
-    const mw = createDeviceMiddleware(() => "mobile");
-    await mw(ctx, async () => {});
-    expect((ctx.config.headers as Record<string, string>)?.["X-Device"]).toBe("mobile");
   });
 });
 

@@ -1,26 +1,19 @@
 ﻿<script setup lang="ts">
 import { ref, reactive } from "vue";
-import { useRouter } from "vue-router";
-import { HttpClient, createRetryMiddleware, createAuthMiddleware } from "@sisin/http-client";
+import { HttpClient, createRetryMiddleware, HttpStatusMiddleware } from "@sisin/http-client";
 import { loginApi, getUserInfoApi, refreshTokenApi, getTokenStatus, clearTokens } from "../../api/common";
-
-const router = useRouter();
 
 // ---- Auth 状态 ----
 function refreshAuthStatus() {
   const st = getTokenStatus();
+  console.log("Auth Status:", st);
   authStatus.accessToken = st.accessToken ? st.accessToken.substring(0, 20) + "..." : "(无)";
   authStatus.refreshToken = st.refreshToken ? st.refreshToken.substring(0, 20) + "..." : "(无)";
   authStatus.loggedIn = st.loggedIn;
 }
 
-// ---- 基础测试客户端（裸 HttpClient，无中间件，用于 jsonplaceholder 测试）----
-const jsonHttp = new HttpClient({ baseURL: "https://jsonplaceholder.typicode.com", timeout: 10000 });
-
-// ---- 完整中间件链实例 ----
-const httpFull = new HttpClient({ baseURL: "https://jsonplaceholder.typicode.com", timeout: 10000 });
-httpFull.use(createAuthMiddleware(() => "test-token-abc"));
-httpFull.use(createRetryMiddleware({ maxRetries: 1, delay: 500 }));
+// ---- 基础测试客户端（裸 HttpClient，无中间件，用于本地后端测试）----
+const localHttp = new HttpClient({ baseURL: "/api", timeout: 10000 });
 
 const result = ref("");
 const loading = ref(false);
@@ -38,65 +31,67 @@ console.log = (...args: any[]) => {
   originalLog.apply(console, args);
 };
 
-// ---- 基础功能测试 ----
+// ---- 基础功能测试（全部指向本地后端 /api）----
 async function testGet() {
   loading.value = true; result.value = "";
-  try { result.value = JSON.stringify(await jsonHttp.get("/posts/1"), null, 2); }
+  try { result.value = JSON.stringify(await localHttp.get("/public/auth/refresh"), null, 2); }
   catch (e: any) { result.value = "ERROR: " + e.message; }
   finally { loading.value = false; }
 }
 
 async function testPost() {
   loading.value = true; result.value = "";
-  try { result.value = JSON.stringify(await jsonHttp.post("/posts", { title: "foo", body: "bar", userId: 1 }), null, 2); }
+  try { result.value = JSON.stringify(await localHttp.post("/public/auth/login", { username: "admin", password: "123456" }), null, 2); }
   catch (e: any) { result.value = "ERROR: " + e.message; }
   finally { loading.value = false; }
 }
 
 async function testError() {
   loading.value = true; result.value = "";
-  try { await jsonHttp.get("/posts/99999"); }
+  const h = new HttpClient({ baseURL: "/api", timeout: 10000 });
+  h.use(HttpStatusMiddleware);
+  try { await h.get("/nonexistent-route"); }
   catch (e: any) { result.value = "ERROR: " + e.message; }
   finally { loading.value = false; }
 }
 
 // ---- 洋葱顺序测试 ----
 async function testOnionOrder() {
-  const h = new HttpClient({ baseURL: "https://jsonplaceholder.typicode.com", timeout: 10000 });
+  const h = new HttpClient({ baseURL: "/api", timeout: 10000 });
   h.use(async (_ctx, next) => { logs.push("[Onion] m1: before"); await next(); logs.push("[Onion] m1: after"); });
   h.use(async (_ctx, next) => { logs.push("[Onion] m2: before"); await next(); logs.push("[Onion] m2: after"); });
   loading.value = true; result.value = "";
-  try { result.value = JSON.stringify(await h.get("/posts/1"), null, 2) + "\n\n(洋葱顺序正确)"; }
+  try { result.value = JSON.stringify(await h.get("/public/auth/refresh"), null, 2) + "\n\n(洋葱顺序正确)"; }
   catch (e: any) { result.value = "ERROR: " + e.message; }
   finally { loading.value = false; }
 }
 
 // ---- 重试测试 ----
 async function testRetry() {
-  const h = new HttpClient({ baseURL: "https://jsonplaceholder.typicode.com", timeout: 10000 });
+  const h = new HttpClient({ baseURL: "/api", timeout: 10000 });
   let callCount = 0, isFirst = true;
   h.use(async (ctx, next) => {
     callCount++;
-    if (isFirst && ctx.config.url?.includes("/posts/1")) { isFirst = false; throw new Error("mock fail"); }
+    if (isFirst && ctx.config.url?.includes("/public/auth/refresh")) { isFirst = false; throw new Error("mock fail"); }
     await next();
   });
   h.use(createRetryMiddleware({ maxRetries: 2, delay: 200, shouldRetry: () => true }));
   loading.value = true; result.value = "";
-  try { result.value = JSON.stringify(await h.get("/posts/1"), null, 2) + "\n\n(重试: " + callCount + " 次)"; }
+  try { result.value = JSON.stringify(await h.get("/public/auth/refresh"), null, 2) + "\n\n(重试: " + callCount + " 次)"; }
   catch (e: any) { result.value = "ERROR: " + e.message; }
   finally { loading.value = false; }
 }
 
 // ---- 双 next 守卫 ----
 async function testDoubleNextGuard() {
-  const h = new HttpClient({ baseURL: "https://jsonplaceholder.typicode.com", timeout: 10000 });
+  const h = new HttpClient({ baseURL: "/api", timeout: 10000 });
   h.use(async (_ctx, next) => { logs.push("[Guard] m1: before"); await next(); logs.push("[Guard] m1: after"); });
   h.use(async (_ctx, next) => {
     logs.push("[Guard] m2: before (第1次 next)"); await next(); logs.push("[Guard] m2: after");
     logs.push("[Guard] m2: 第2次 next（应被拦截）"); await next(); logs.push("[Guard] m2: 第2次返回");
   });
   loading.value = true; result.value = "";
-  try { result.value = JSON.stringify(await h.get("/posts/1"), null, 2) + "\n\n(守卫拦截成功)"; }
+  try { result.value = JSON.stringify(await h.get("/public/auth/refresh"), null, 2) + "\n\n(守卫拦截成功)"; }
   catch (e: any) { result.value = "ERROR: " + e.message; }
   finally { loading.value = false; }
 }
@@ -147,10 +142,10 @@ function clearLogs() { logs.splice(0, logs.length); }
 
     <div class="section-divider"></div>
 
-    <h2>基础功能测试</h2>
+    <h2>基础功能测试（指向本地后端）</h2>
     <div class="controls">
-      <button :disabled="loading" @click="testGet">GET /posts/1</button>
-      <button :disabled="loading" @click="testPost">POST /posts</button>
+      <button :disabled="loading" @click="testGet">GET /refresh</button>
+      <button :disabled="loading" @click="testPost">POST /login</button>
       <button :disabled="loading" @click="testError">GET 404</button>
       <button :disabled="loading" @click="testOnionOrder">Onion Order</button>
       <button :disabled="loading" @click="testDoubleNextGuard">Double next Guard</button>

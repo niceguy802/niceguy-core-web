@@ -4,7 +4,7 @@ import type { ApiResponse } from "@sisin/http-client";
 export type { ApiResponse };
 export { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, buildStorageKey };
 
-// ── 全局 TokenManager 实例（供 getTokenStatus / clearTokens 使用）──
+// ── 全局 TokenManager 实例（传入 createHttpClient 实现状态共享）──
 export const tokenManager = new TokenManager({ mode: "memory" });
 
 // ── 全局 HTTP 客户端实例（单例）──
@@ -15,6 +15,8 @@ export const http = createHttpClient({
   tokenMode: "memory",
   loginEndpoint: "/public/auth/login",
   refreshEndpoint: "/public/auth/refresh",
+  // 传入已创建的 TokenManager，使 getTokenStatus / clearTokens 与内部状态同步
+  tokenManager,
 });
 
 /** Token 状态查询（供组件展示用） */

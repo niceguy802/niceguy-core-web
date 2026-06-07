@@ -6,7 +6,9 @@ export default defineConfig({
   plugins: [vue()],
   resolve: {
     alias: {
-      '@': resolve(__dirname, '../src')
+      '@': resolve(__dirname, '../src'),
+      // 本地开发时直接解析 http-client 源码，实现热更新
+      '@sisin/http-client': resolve(__dirname, '../packages/http-client/src/index.ts'),
     }
   },
   server: {

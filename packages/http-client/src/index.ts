@@ -4,7 +4,6 @@ import { HttpStatusMiddleware } from "./middlewares/HttpStatusMiddleware";
 import { ResponseTransformMiddleware } from "./middlewares/ResponseTransformMiddleware";
 import { createErrorMiddleware } from "./middlewares/ErrorMiddleware";
 import { createAuthMiddleware } from "./middlewares/AuthMiddleware";
-import { createDeviceMiddleware } from "./middlewares/DeviceMiddleware";
 import { createRefreshTokenMiddleware } from "./middlewares/RefreshTokenMiddleware";
 import { createAuthResponseMiddleware } from "./middlewares/AuthResponseMiddleware";
 import type { ErrorHandler } from "./middlewares/ErrorMiddleware";
@@ -25,7 +24,6 @@ export { ResponseTransformMiddleware } from "./middlewares/ResponseTransformMidd
 export { createErrorMiddleware } from "./middlewares/ErrorMiddleware";
 export { LoggerMiddleware } from "./middlewares/LoggerMiddleware";
 export { createAuthMiddleware } from "./middlewares/AuthMiddleware";
-export { createDeviceMiddleware } from "./middlewares/DeviceMiddleware";
 export { createLoadingMiddleware } from "./middlewares/LoadingMiddleware";
 export { createRefreshTokenMiddleware } from "./middlewares/RefreshTokenMiddleware";
 export { createRetryMiddleware } from "./middlewares/RetryMiddleware";
@@ -62,8 +60,6 @@ export interface CreateHttpClientOptions {
   baseURL?: string;
   /** 超时时间 (ms)，默认 10000 */
   timeout?: number;
-  /** 设备标识，默认 "pc" */
-  device?: string | (() => string);
   /**
    * token 注入方式：
    * - true（默认）: 从 localStorage 读取 accessToken 自动注入
@@ -104,30 +100,16 @@ export interface CreateHttpClientOptions {
 
   /** 透传 axios 原生配置 */
   axiosConfig?: Omit<AxiosRequestConfig, "baseURL" | "timeout">;
+
+  /** 外部 TokenManager 实例（用于共享 token 状态）；不传则内部自动创建 */
+  tokenManager?: TokenManager;
 }
-
-const resolveToken =
-  (key: string): (() => string | null) =>
-  () => {
-    try {
-      return window.localStorage.getItem(key);
-    } catch {
-      return null;
-    }
-  };
-
-const resolveDevice =
-  (device: string | (() => string)): (() => string) =>
-  () => {
-    if (typeof device === "function") return device();
-    return device;
-  };
 
 /**
  * 创建预配置好的 HttpClient 实例
  *
  * 已内置中间件（洋葱模型从外到内）：
- *   RefreshToken → AuthResponse → Error → ResponseTransform → HttpStatus → Device → Auth → axios
+ *   RefreshToken → AuthResponse → Error → ResponseTransform → HttpStatus → Auth → axios
  *
  * @example
  * const http = createHttpClient({ baseURL: "/api" })
@@ -140,7 +122,6 @@ export function createHttpClient(
   const {
     baseURL = "/api",
     timeout = 10000,
-    device = "pc",
     auth = true,
     refresh = true,
     refreshOptions,
@@ -152,11 +133,13 @@ export function createHttpClient(
     onReLogin,
     loginPageUrl,
     axiosConfig,
+    tokenManager: externalTokenManager,
   } = options;
 
   // ── TokenManager ──
+  // 优先使用外部传入的实例（如 playground 共享给路由守卫），否则内部创建
 
-  const tokenManager = new TokenManager({
+  const tokenManager = externalTokenManager ?? new TokenManager({
     mode: tokenMode,
     accessTokenKey: tokenKeys?.accessToken,
     refreshTokenKey: tokenKeys?.refreshToken,
@@ -173,7 +156,6 @@ export function createHttpClient(
       refreshClient.use(createErrorMiddleware());
       refreshClient.use(ResponseTransformMiddleware);
       refreshClient.use(HttpStatusMiddleware);
-      refreshClient.use(createDeviceMiddleware(resolveDevice(device)));
       refreshClient.use(createAuthMiddleware(() =>
         tokenManager.getRefreshToken()
       ));
@@ -182,7 +164,6 @@ export function createHttpClient(
       refreshClient.use(createErrorMiddleware());
       refreshClient.use(ResponseTransformMiddleware);
       refreshClient.use(HttpStatusMiddleware);
-      refreshClient.use(createDeviceMiddleware(resolveDevice(device)));
     }
 
     client.use(
@@ -193,10 +174,10 @@ export function createHttpClient(
         refreshToken:
           refreshOptions?.refreshToken ??
           (async () => {
-            const res = await refreshClient.post<ApiResponse<string>>(
+            const res = await refreshClient.post<ApiResponse<{ accessToken: string }>>(
               refreshEndpoint ?? "/public/auth/refresh"
             );
-            return res.data;
+            return res.data.accessToken;
           }),
         onRefreshSuccess:
           refreshOptions?.onRefreshSuccess ??
@@ -230,7 +211,6 @@ export function createHttpClient(
   client.use(createErrorMiddleware(onError ? { onError } : undefined));
   client.use(ResponseTransformMiddleware);
   client.use(HttpStatusMiddleware);
-  client.use(createDeviceMiddleware(resolveDevice(device)));
 
   // ── 洋葱模型内层：Auth ──
   if (auth) {
@@ -257,6 +237,8 @@ export interface VerifyAuthOptions {
   tokenMode?: TokenMode;
   /** 透传 axios 配置 */
   axiosConfig?: AxiosRequestConfig;
+  /** 外部 TokenManager 实例（用于共享 token 状态）；不传则内部自动创建 */
+  tokenManager?: TokenManager;
 }
 
 /**
@@ -283,9 +265,10 @@ export async function verifyAuth(
     loginPageUrl = "/login",
     tokenMode = "memory",
     axiosConfig,
+    tokenManager: externalTokenManager,
   } = options;
 
-  const tokenManager = new TokenManager({ mode: tokenMode });
+  const tokenManager = externalTokenManager ?? new TokenManager({ mode: tokenMode });
 
   const refreshClient = new HttpClient({ baseURL, ...axiosConfig });
 
@@ -307,11 +290,10 @@ export async function verifyAuth(
   refreshClient.use(createErrorMiddleware());
   refreshClient.use(ResponseTransformMiddleware);
   refreshClient.use(HttpStatusMiddleware);
-  refreshClient.use(createDeviceMiddleware(() => "pc"));
 
   try {
     const res = await refreshClient.post(refreshEndpoint);
-    const newToken = (res as any)?.data;
+    const newToken = (res as any)?.data?.accessToken;
     if (newToken) {
       tokenManager.setAccessToken(newToken);
       return true;
@@ -328,4 +310,3 @@ export async function verifyAuth(
     return false;
   }
 }
-

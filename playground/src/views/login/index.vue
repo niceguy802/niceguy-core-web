@@ -1,13 +1,20 @@
 ﻿<script setup lang="ts">
 import { ref } from "vue";
 import { useRouter } from "vue-router";
-import { loginApi } from "../../api/common";
+import { loginApi, getTokenStatus } from "../../api/common";
 
 const router = useRouter();
 const username = ref("admin");
 const password = ref("123456");
 const loading = ref(false);
 const errorMsg = ref("");
+
+// 判断是否登录，登录直接跳转
+const { loggedIn } = getTokenStatus();
+console.log("[Login] 是否登录", loggedIn); // true
+if (loggedIn) {
+  router.push("/");
+}
 
 async function handleLogin() {
   loading.value = true;
