@@ -8,7 +8,8 @@ export default defineConfig({
     alias: {
       '@': resolve(__dirname, '../src'),
       // 本地开发时直接解析 http-client 源码，实现热更新
-      '@sisin/http-client': resolve(__dirname, '../packages/http-client/src/index.ts'),
+      // package.json 中开发环境使用 "@sisin/http-client": "file:../packages/http-client",
+      // '@sisin/http-client': resolve(__dirname, '../packages/http-client/src/index.ts'),
     }
   },
   server: {

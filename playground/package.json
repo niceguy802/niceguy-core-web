@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@sisin/http-client": "file:../packages/http-client",
+    "@sisin/http-client": "^1.0.0",
     "axios": "^1.17.0",
     "core": "*",
     "element-plus": "^2.14.1",

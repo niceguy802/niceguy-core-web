@@ -174,9 +174,12 @@ export function createHttpClient(
         refreshToken:
           refreshOptions?.refreshToken ??
           (async () => {
-            const res = await refreshClient.post<ApiResponse<{ accessToken: string }>>(
+            const res = await refreshClient.post<ApiResponse<{ accessToken?: string }>>(
               refreshEndpoint ?? "/public/auth/refresh"
             );
+            if (!res.data?.accessToken) {
+              throw new Error("刷新失败：响应中未找到 accessToken");
+            }
             return res.data.accessToken;
           }),
         onRefreshSuccess:

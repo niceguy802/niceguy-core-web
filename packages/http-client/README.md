@@ -1,4 +1,4 @@
-# @sisin/http-client
+﻿# @sisin/http-client
 基于 axios 的洋葱模型（koa-style）中间件 HTTP 客户端，支持 Vue 3 / React / 原生 TypeScript / JavaScript 项目。
 
 ## 目录
@@ -80,7 +80,8 @@ import { createHttpClient } from "@sisin/http-client"
 const http = createHttpClient()
 
 // GET 请求
-const user = await http.get("/api/user")
+const list = await http.get("/api/user", { params: { page: 1, size: 10 } })
+// → GET /api/user?page=1&size=10
 
 // POST 请求
 const res = await http.post("/api/login", { username, password })
@@ -88,15 +89,15 @@ const res = await http.post("/api/login", { username, password })
 
 `createHttpClient` 会自动注册以下内置中间件：
 
-```plain
-RefreshToken → AuthResponse → Error → ResponseTransform → HttpStatus → Device → Auth → [axios]
+```
+RefreshToken → AuthResponse → Error → ResponseTransform → HttpStatus → Auth → [axios]
 ```
 
 请求从外到内流入，响应从内到外流出：
 
-```plain
-请求方向：RefreshToken → Error → ... → Auth → axios
-响应方向：RefreshToken ← Error ← ... ← Auth ← axios
+```
+请求方向：RefreshToken → AuthResponse → Error → ... → Auth → axios
+响应方向：RefreshToken ← AuthResponse ← Error ← ... ← Auth ← axios
 ```
 
 ### 传递 axios 原生配置
@@ -131,7 +132,7 @@ app.use(createHttpPlugin({
   baseURL: "/api",
   // 支持所有 createHttpClient 的配置选项
   timeout: 10000,
-  tokenMode: "memory", // token 存储模式：memory / localStorage / cookie ,详情看Token 管理
+  tokenMode: "memory", // token 存储模式：memory / localStorage / cookie，详情看 Token 管理
   loginEndpoint: "/public/auth/login",
   refreshEndpoint: "/public/auth/refresh",
 }))
@@ -184,11 +185,15 @@ async function fetchData() {
 
 ```typescript
 // utils/http.ts
-import { createHttpClient } from "@sisin/http-client"
+import { createHttpClient, TokenManager } from "@sisin/http-client"
+
+// ── 全局 TokenManager 实例（传入 createHttpClient 实现状态共享）──
+export const tokenManager = new TokenManager({ mode: "memory" })
 
 export const http = createHttpClient({
   baseURL: "/api",
   timeout: 10000,
+  tokenManager,
 })
 ```
 
@@ -215,7 +220,7 @@ export const useUserStore = defineStore("user", {
 import { createApp } from "vue"
 import App from "./App.vue"
 import { createHttpPlugin } from "@sisin/http-client"
-import { http } from "./utils/http"  // 独立实例给组件外用
+import { http } from "./utils/http"
 
 const app = createApp(App)
 app.use(createHttpPlugin({ baseURL: "/api" }))
@@ -315,19 +320,19 @@ const data = await http.get("/data")
 | --- | --- | --- | --- |
 | `baseURL` | `string` | `"/api"` | 请求基础路径 |
 | `timeout` | `number` | `10000` | 超时时间（毫秒） |
-| `device` | `string | () => string` | `"pc"` | 设备标识，发送到 `X-Device` 请求头 |
 | `axiosConfig` | `AxiosRequestConfig` | `{}` | 透传 axios 原生配置（如 `withCredentials`） |
 
 
 ### 认证配置
 | 参数 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `auth` | `boolean | () => string | null` | `true` | `true`：自动从 localStorage 读取 accessToken；`false`：不注入；函数：自定义 token 获取逻辑 |
-| `refresh` | `boolean` | `true` | 是否启用 401 自动刷新 Token |
-| `tokenMode` | `"localStorage" | "cookie"` \| `"memory"` | `"memory"` | Token 管理模式（详见 Token 管理章节） |
+| `auth` | `boolean \| () => string \| null` | `true` | `true`：自动从 tokenManager 读取 accessToken；`false`：不注入；函数：自定义 token 获取逻辑 |
+| `refresh` | `boolean` | `true` | 是否启用 401 / 40101 自动刷新 Token |
+| `tokenMode` | `"localStorage" \| "cookie" \| "memory"` | `"memory"` | Token 管理模式（详见 Token 管理章节） |
 | `loginEndpoint` | `string` | `-` | 登录接口路径，设置后 AuthResponseMiddleware 自动提取并保存 token |
 | `refreshEndpoint` | `string` | `-` | 刷新接口路径，设置后 AuthResponseMiddleware 自动提取并保存新 token |
 | `tokenKeys` | `{ accessToken?, refreshToken? }` | `-` | 自定义 localStorage 存储 key，默认以 `window.location.origin` 为前缀隔离 |
+| `tokenManager` | `TokenManager` | `-` | 外部 TokenManager 实例，传入后与 createHttpClient / verifyAuth 共享 token 状态，常用于 memory 模式同步状态给路由守卫 |
 
 
 ### 错误与重新登录配置
@@ -347,7 +352,8 @@ const http = createHttpClient({
     getRefreshToken: () => localStorage.getItem("my_rt"),
     refreshToken: async () => {
       const res = await fetch("/api/refresh", { method: "POST" })
-      return res.json().then(d => d.accessToken)
+      const body = await res.json()
+      return body.data.accessToken  // 刷新接口预期返回 { success, data: { accessToken } }
     },
     onRefreshSuccess: (newToken) => {
       localStorage.setItem("my_at", newToken)
@@ -362,32 +368,42 @@ const http = createHttpClient({
 ---
 
 ## Token 管理
-本包通过 `TokenManager` 实现统一的 Token 存取，支持两种模式。
+本包通过 `TokenManager` 实现统一的 Token 存取，支持三种模式。
 
 ### memory 模式（默认）
-
-`accessToken` 存在内存（供前端注入 `Authorization` 头），`refreshToken` 由后端通过 HTTP-only cookie 管理（浏览器自动携带，前端无需处理）。
+`accessToken` 存在内存（供前端注入 `Authorization` 头），`refreshToken` 由后端通过 HTTP-only cookie 管理（浏览器自动携带，前端无需处理）。**页面刷新后 accessToken 丢失**，需要在 app mount 前调用 `verifyAuth` 重新获取，并传入同一个 `tokenManager` 实例，才能使 `verifyAuth` 刷新后的 token 同步到 `http` 实例。
 
 ```typescript
-const http = createHttpClient({ tokenMode: "memory" })
+// utils/http.ts
+import { createHttpClient, TokenManager } from "@sisin/http-client"
 
-// 或配合 createHttpPlugin
-app.use(createHttpPlugin({ tokenMode: "memory" }))
+export const tokenManager = new TokenManager({ mode: "memory" })
+
+export const http = createHttpClient({
+  tokenMode: "memory",
+  tokenManager,  // 传入以共享状态
+})
+```
+
+```typescript
+// main.ts
+import { http, tokenManager } from "./utils/http"
+import { verifyAuth } from "@sisin/http-client"
+
+await verifyAuth({
+  tokenMode: "memory",
+  tokenManager,  // 传入同一个实例，刷新后的 token 才能同步给 http
+})
 ```
 
 ### cookie 模式
-
 `accessToken` 仍存 `localStorage`（供前端注入 `Authorization` 头），`refreshToken` 由后端通过 HTTP-only cookie 管理（浏览器自动携带，前端无需处理）。
 
 ```typescript
 const http = createHttpClient({ tokenMode: "cookie" })
-
-// 或配合 createHttpPlugin
-app.use(createHttpPlugin({ tokenMode: "cookie" }))
 ```
 
 ### localStorage 模式
-
 `accessToken` 和 `refreshToken` 都存储在浏览器的 `localStorage` 中。
 
 ```typescript
@@ -412,11 +428,11 @@ const http = createHttpClient({
 ```
 
 ### 自动保存 Token（AuthResponseMiddleware）
-设置 `loginEndpoint` 后，中间件会自动拦截登录/刷新接口的响应，提取 token 并保存到 `TokenManager`，同时从响应体内剥离 token 字段，业务层完全无感知。
+设置 `loginEndpoint` 后，中间件会自动拦截登录/刷新接口的响应，从响应 `data` 中提取 `accessToken` 字段（可自定义）并保存到 `TokenManager`，同时从响应体内剥离 token 字段，业务层完全无感知。
 
 ```typescript
 const http = createHttpClient({
-  loginEndpoint: "/public/auth/login",   // 登录接口 POST
+  loginEndpoint: "/public/auth/login",    // 登录接口 POST
   refreshEndpoint: "/public/auth/refresh", // 刷新接口 POST
 })
 
@@ -439,13 +455,19 @@ const http = createHttpClient({
 ```
 
 ### 自动刷新 Token（RefreshTokenMiddleware）
-当请求返回 401（`AuthError`）或业务码 40101（`BusinessError`）时，中间件自动尝试刷新 Token：
+当请求返回 **业务码 40101**（`BusinessError`）时，中间件自动尝试刷新 Token：
 
 1. 获取 `refreshToken`
 2. 调用刷新接口获取新 `accessToken`
 3. 更新当前请求的 `Authorization` 头
 4. 重试原始请求
 5. 多个并发请求同时过期时，只会发起一次刷新请求（去重）
+
+刷新成功后的响应格式预期为：
+
+```json
+{ "success": true, "code": 0, "message": "ok", "data": { "accessToken": "新token..." } }
+```
 
 刷新失败时清除所有 token 并跳转登录页。
 
@@ -455,7 +477,7 @@ import { TokenManager } from "@sisin/http-client"
 
 const manager = new TokenManager()
 manager.getAccessToken()    // 读取 accessToken
-manager.getRefreshToken()   // 读取 refreshToken
+manager.getRefreshToken()   // 读取 refreshToken（仅 localStorage 模式）
 manager.clearAll()          // 清除所有 token
 ```
 
@@ -463,17 +485,17 @@ manager.clearAll()          // 清除所有 token
 
 ## 内置中间件详解
 ### 洋葱模型中间件顺序（外 → 内）
-```plain
-RefreshToken → Error → ResponseTransform → HttpStatus → Device → Auth → [axios]
+```
+RefreshToken → AuthResponse → Error → ResponseTransform → HttpStatus → Auth → [axios]
 ```
 
 | 顺序 | 中间件 | 说明 |
 | --- | --- | --- |
-| 1（最外层） | **RefreshTokenMiddleware** | 401 自动刷新 Token，并发去重 |
-| 2 | **ErrorMiddleware** | 按错误类型（Auth / Business / HTTP / Network）输出日志 |
-| 3 | **ResponseTransformMiddleware** | 解析 `ApiResponse` 结构，`success=false` 时抛出 `BusinessError` |
-| 4 | **HttpStatusMiddleware** | 检查 HTTP 状态码，401 抛出 `AuthError`，4xx/5xx 抛出 `HttpError` |
-| 5 | **DeviceMiddleware** | 注入 `X-Device` 请求头 |
+| 1（最外层） | **RefreshTokenMiddleware** | 40101 自动刷新 Token，并发去重 |
+| 2 | **AuthResponseMiddleware** | 拦截登录/刷新响应，自动提取 token 并保存 |
+| 3 | **ErrorMiddleware** | 按错误类型（Auth / Business / HTTP / Network）输出日志 |
+| 4 | **ResponseTransformMiddleware** | 解析 `ApiResponse` 结构，`success=false` 时抛出 `BusinessError` |
+| 5 | **HttpStatusMiddleware** | 检查 HTTP 状态码，401 抛出 `AuthError`，4xx/5xx 抛出 `HttpError` |
 | 6（最内层） | **AuthMiddleware** | 注入 `Authorization: Bearer <accessToken>` 请求头 |
 | 末端 | axios | 实际发送 HTTP 请求 |
 
@@ -486,15 +508,6 @@ import { createAuthMiddleware } from "@sisin/http-client"
 
 const http = new HttpClient()
 http.use(createAuthMiddleware(() => localStorage.getItem("my_token")))
-```
-
-**DeviceMiddleware** — 注入 X-Device 头（用于识别设备类型）
-
-```typescript
-import { createDeviceMiddleware } from "@sisin/http-client"
-
-const http = new HttpClient()
-http.use(createDeviceMiddleware(() => navigator.userAgent.includes("Mobile") ? "mobile" : "pc"))
 ```
 
 **HttpStatusMiddleware** — 按 HTTP 状态码抛对应错误
@@ -586,7 +599,7 @@ manager.removeAll()                            // 清空所有
 
 ## 错误处理
 ### 错误继承层级
-```plain
+```
 BaseError
  ├── HttpError        (HTTP 状态码错误，如 403 / 404 / 500)
  ├── AuthError        (401 未授权)
@@ -633,14 +646,17 @@ const http = createHttpClient({
 在应用启动时验证历史 Token 是否有效，推荐在 `main.ts` 中调用。
 
 ```typescript
-import { verifyAuth } from "@sisin/http-client"
+import { verifyAuth, TokenManager } from "@sisin/http-client"
 
-// 确保在 app.mount() 之前 await
+// memory 模式下需要传入与 createHttpClient 共享的 TokenManager 实例
+const tokenManager = new TokenManager({ mode: "memory" })
+
 const ok = await verifyAuth({
   baseURL: "/api",
   refreshEndpoint: "/public/auth/refresh",
   loginPageUrl: "/login",
-  tokenMode: "localStorage",  // 或 "cookie"
+  tokenMode: "memory",
+  tokenManager, // 传入共享实例，使刷新后的 token 同步给 http 客户端
 })
 
 if (!ok) {
@@ -651,11 +667,12 @@ const app = createApp(App)
 app.mount("#app")
 ```
 
-`verifyAuth` 内部逻辑：
+### verifyAuth 内部逻辑
 
-1. **localStorage 模式**：读取 refreshToken 发起刷新请求，成功则更新 accessToken
-2. **cookie 模式**：浏览器自动携带 HTTP-only cookie，刷新成功则更新 accessToken
-3. **刷新失败**：自动清除所有 token 并跳转到登录页
+1. **memory 模式**：浏览器自动携带 HTTP-only cookie 发起刷新，成功则更新 accessToken 到内存，需要传入与 `createHttpClient` 共享的 `tokenManager`
+2. **cookie 模式**：浏览器自动携带 HTTP-only cookie，成功则更新 accessToken 到 localStorage
+3. **localStorage 模式**：读取 refreshToken 发起刷新请求，成功则更新 accessToken 到 localStorage
+4. **刷新失败**：自动清除所有 token 并跳转到登录页
 
 ---
 
@@ -709,6 +726,22 @@ http.use(
 )
 ```
 
+### GET / DELETE 请求传参
+GET 和 DELETE 请求不支持请求体，传参时需要将参数拼接到 URL 上。本库提供了两种方式：
+
+```typescript
+// 方式一：通过 params（原生 axios 方式）
+http.get("/api/users", { params: { page: 1, size: 10 } })
+
+// 方式二：通过 URL自行拼接
+http.get("/api/users" + "?page=1&size=10")
+// → GET /api/users?page=1&size=10
+
+// DELETE 同理
+// 其他请求如POST
+http.post("/api/users", { id: 1, age: 10 } )
+```
+
 ### 使用空白 HttpClient 手动组装中间件
 如果需要精细控制中间件顺序，可以直接使用 `HttpClient` 类：
 
@@ -748,7 +781,7 @@ const data = await http.get("/users")
 | `verifyAuth` | 函数 | 启动时验证 Token 有效性 |
 
 
-### HttpClient 方法
+### HttpClient 方法 - 沿用 Axios API
 | 方法 | 签名 | 说明 |
 | --- | --- | --- |
 | `request` | `request<T>(config) => Promise<T>` | 通用请求 |
@@ -768,10 +801,10 @@ const data = await http.get("/users")
 | 方法 | 签名 | 说明 |
 | --- | --- | --- |
 | `setAccessToken` | `setAccessToken(token) => void` | 保存 accessToken |
-| `getAccessToken` | `getAccessToken() => string | null` | 获取 accessToken |
+| `getAccessToken` | `getAccessToken() => string \| null` | 获取 accessToken |
 | `removeAccessToken` | `removeAccessToken() => void` | 移除 accessToken |
 | `setRefreshToken` | `setRefreshToken(token) => void` | 保存 refreshToken（仅 localStorage 模式） |
-| `getRefreshToken` | `getRefreshToken() => string | null` | 获取 refreshToken（仅 localStorage 模式） |
+| `getRefreshToken` | `getRefreshToken() => string \| null` | 获取 refreshToken（仅 localStorage 模式） |
 | `removeRefreshToken` | `removeRefreshToken() => void` | 移除 refreshToken（仅 localStorage 模式） |
 | `clearAll` | `clearAll() => void` | 清除所有 token |
 
@@ -779,11 +812,10 @@ const data = await http.get("/users")
 ### 中间件创建函数
 | 函数 | 参数 | 说明 |
 | --- | --- | --- |
-| `createAuthMiddleware` | `getToken: () => string | null` | 注入 Authorization 头 |
-| `createDeviceMiddleware` | `getDevice: () => string` | 注入 X-Device 头 |
+| `createAuthMiddleware` | `getToken: () => string \| null` | 注入 Authorization 头 |
 | `createErrorMiddleware` | `handler?: ErrorHandler` | 按类型输出错误日志 |
 | `createLoadingMiddleware` | `handler: LoadingHandler` | 请求加载状态管理 |
-| `createRefreshTokenMiddleware` | `options: RefreshTokenOptions` | 401 自动刷新 Token |
+| `createRefreshTokenMiddleware` | `options: RefreshTokenOptions` | 401 / 40101 自动刷新 Token |
 | `createAuthResponseMiddleware` | `options: AuthResponseOptions` | 登录/刷新响应自动保存 Token |
 | `createRetryMiddleware` | `options?: RetryOptions` | 请求失败自动重试 |
 

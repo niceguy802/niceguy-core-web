@@ -73,7 +73,6 @@ export class TokenManager {
 
   /** 保存 accessToken */
   setAccessToken(token: string): void {
-    console.log("TokenManager setAccessToken", token); // debug
     if (this.config.mode === "memory") {
       this._memoryAccessToken = token;
     } else {
@@ -88,8 +87,6 @@ export class TokenManager {
   /** 获取 accessToken */
   getAccessToken(): string | null {
     if (this.config.mode === "memory") {
-      console.log("TokenManager getAccessToken", this._memoryAccessToken); // debug // debug
-
       return this._memoryAccessToken;
     } else {
       try {
