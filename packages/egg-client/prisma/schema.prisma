@@ -1,0 +1,18 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "./generated/fx"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model user_info {
+  id          Int      @id @default(autoincrement())
+  en_name     String   @unique(map: "uq_user_info_en_name")
+  pwd         String
+  status      Int      @default(1)
+  update_time DateTime @updatedAt
+
+  @@map("user_info")
+}

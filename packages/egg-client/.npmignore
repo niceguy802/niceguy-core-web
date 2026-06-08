@@ -1,0 +1,8 @@
+node_modules/
+test/
+prisma/
+.gitignore
+.npmignore
+*.log
+.env*
+example/

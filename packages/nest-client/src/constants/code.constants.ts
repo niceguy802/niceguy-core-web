@@ -1,0 +1,10 @@
+﻿// HTTP 响应状态码常量
+export const CODE = {
+  SUCCESS: 0,
+  BAD_REQUEST: 400,
+  UNAUTHORIZED: 401,
+  NOT_ALLOWED: 405,
+  FORBIDDEN: 403,
+  NOT_FOUND: 404,
+  SERVER_ERROR: 500,
+} as const;

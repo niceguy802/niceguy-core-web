@@ -1,0 +1,20 @@
+﻿// 错误状态码
+module.exports = {
+  200:   { code: 200,   parent: null,  msg: '请求成功' },
+  400:   { code: 200,   parent: 400,   msg: '请求错误/操作失败' },
+  401:   { code: 401,   parent: null,  msg: '用户未登录或登录过期' },
+  40101: { code: 40101, parent: 401,   msg: 'access登录已过期' },
+  40102: { code: 40102, parent: 401,   msg: 'refresh登录已过期' },
+  40103: { code: 40103, parent: 401,   msg: '非法TOKEN登录' },
+  40104: { code: 40104, parent: 401,   msg: '登录已失效，请重新登录' },
+  40105: { code: 40105, parent: 401,   msg: '用户不存在' },
+  40106: { code: 40106, parent: 401,   msg: '密码错误' },
+  40107: { code: 40107, parent: 401,   msg: '暂不支持当前平台登录' },
+  403:   { code: 403,   parent: null,  msg: '权限不足，禁止访问' },
+  40301: { code: 40301, parent: 403,   msg: '账号禁用' },
+  40302: { code: 40302, parent: 403,   msg: '权限不足' },
+  404:   { code: 404,   parent: null,  msg: '未找到资源' },
+  405:   { code: 405,   parent: null,  msg: '非法请求' },
+  422:   { code: 422,   parent: null,  msg: '数据校验不通过' },
+  500:   { code: 500,   parent: null,  msg: '服务器错误' },
+};
