@@ -1,5 +1,5 @@
 const logger = require('../app/utils/logger');
-const initAuth = require('./init-auth');
+// const initAuth = require('./init-auth');
 // const { formatResult, runDbChecks } = require('./db_check');
 
 module.exports = async app => {
