@@ -2,6 +2,7 @@
 基于 axios 的洋葱模型（koa-style）中间件 HTTP 客户端，支持 Vue 3 / React / 原生 TypeScript / JavaScript 项目。
 
 ## 目录
++ [简介](#简介)
 + [依赖说明](#依赖说明)
 + [支持的项目类型](#支持的项目类型)
 + [安装](#安装)
@@ -17,6 +18,19 @@
 + [启动时验证 Token](#启动时验证-token)
 + [扩展功能](#扩展功能)
 + [API 参考](#api-参考)
+
+---
+
+## 简介
+
+**@sisin/http-client** 是一个基于 axios、采用 koa 风格洋葱模型的 HTTP 客户端库。它的核心功能包括：
+
+- **可插拔的中间件体系** — 内置 RefreshToken（自动刷新）、Auth（注入 Authorization 头）、ResponseTransform（解析后端统一响应格式）、HttpStatus（按状态码抛错）、Error（分类日志）等 6 个中间件，也支持自定义中间件，并通过 MiddlewareManager 精确控制注册顺序。
+- **一站式 Token 管理** — 支持 memory / localStorage / cookie 三种存取模式，提供 TokenManager 统一存取、AuthResponseMiddleware 自动在登录/刷新响应中提取 token、以及 verifyAuth 启动时验证 Token 有效性。
+- **框架无关 + Vue 3 / React 集成** — 核心客户端与框架解耦，原生 JS/TS 项目可直接使用；Vue 3 提供 createHttpPlugin 插件（this.$url / inject(URL_KEY)），React 可搭配自定义 Hook。
+- **丰富的扩展中间件** — 开箱提供 LoadingMiddleware（全局 loading 状态）、LoggerMiddleware（请求耗时日志）、RetryMiddleware（网络/5xx 自动重试）。
+- **完整的错误继承体系** — BaseError → HttpError / AuthError / BusinessError / NetworkError，支持按类型精确捕获和全局 onError 钩子。
+
 
 ---
 

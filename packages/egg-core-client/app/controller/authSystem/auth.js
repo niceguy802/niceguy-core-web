@@ -6,6 +6,7 @@ const {
 } = require("../../constants/crypt");
 console.log('framework/app/controller/authSystem/auth.js')
 class AuthController extends Controller {
+
   /**
    * 登录：校验 → 调用 service → 返回 accessToken + 设置 refreshToken cookie
    */

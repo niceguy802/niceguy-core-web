@@ -16,9 +16,9 @@ describe('test/framework.test.js', () => {
 
   afterEach(mock.restore);
 
-  it('should GET /', async () => {
+  it('should GET /api', async () => {
     return app.httpRequest()
-      .get('/')
+      .get('/api')
       .expect('framework-example_123456')
       .expect(200);
   });

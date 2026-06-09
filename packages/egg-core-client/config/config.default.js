@@ -10,7 +10,7 @@ module.exports = appInfo => {
    */
   config.test = {
     key: appInfo.name + '_123456',
-    middleware: ["checkReady", "errorHandler", "requestLog", "jwtAuth"],
+    middleware: ["checkReady", "requestLog", "errorHandler", "uploadLimit", "jwtAuth"],
   };
 
   return config;

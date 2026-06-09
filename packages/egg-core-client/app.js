@@ -1,5 +1,12 @@
 ﻿'use strict';
-
+// Windows 控制台编码修复：确保中文不乱码
+if (process.platform === "win32") {
+  try {
+    require("child_process").execSync("chcp 65001", { stdio: "ignore" });
+  } catch (_) {
+    /* 忽略编码设置失败 */
+  }
+}
 const path = require('path');
 const is = require('is-type-of');
 const init = require('./init');

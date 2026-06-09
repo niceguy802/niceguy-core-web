@@ -1,43 +1,52 @@
-const path = require('path')
-const globby = require('globby')
-
+'use strict';
+const fs = require('fs');
+const path = require('path');
+// const { AppWorkerLoader } = require('egg-core');
+console.log(require('egg-core'))
+const { AppWorkerLoader } = require('egg');
 class FrameworkLoader extends AppWorkerLoader {
 
-    loadModuleController() {
+  load() {
 
-        const controllerDir = path.join(
-            this.options.baseDir,
-            'app/modules'
-        )
+    super.load();
 
-        const files = globby.sync([
-            '**/*.controller.{js,ts}'
-        ], {
-            cwd: controllerDir
-        })
+    this.loadFrameworkController();
 
-        this.app.controller = {}
+    this.loadFrameworkRouter();
+  }
 
-        for (const file of files) {
+  loadFrameworkController() {
+    console.log(this.options.baseDir)
+    console.log(this.options)
+    console.log(this.app.baseDir)
+    const controllerDir = path.join(
+      __dirname,
+      'app/controller'
+    );
 
-            const fullPath = path.join(
-                controllerDir,
-                file
-            )
-
-            const controller =
-                require(fullPath)
-
-            const name =
-                file
-                    .replace('.controller.ts', '')
-                    .replace('.controller.js', '')
-                    .replace(/\//g, '.')
-
-            this.app.controller[name] =
-                controller.default || controller
-        }
+    if (!fs.existsSync(controllerDir)) {
+      return;
     }
 
+    this.loadToApp(
+      controllerDir,
+      'controller'
+    );
+  }
+
+  loadFrameworkRouter() {
+
+    const routerFile = path.join(
+      __dirname,
+      'app/router.js'
+    );
+
+    if (!fs.existsSync(routerFile)) {
+      return;
+    }
+
+    require(routerFile)(this.app);
+  }
 }
-module.exports = FrameworkLoader
+
+module.exports = FrameworkLoader;

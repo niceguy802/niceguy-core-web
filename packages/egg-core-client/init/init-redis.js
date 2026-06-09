@@ -1,6 +1,6 @@
 // Redis 初始化
-const redisCreate = require('../app/core/redis');
-const RedisManager = require('../app/core/redis/redis-manager');
+const RedisManager = require('../lib/redis/redis-manager');
+const RedisCreate = require('../lib/redis/redis-create');
 const logger = require('../app/utils/logger');
 
 module.exports = async (app) => {
@@ -11,7 +11,7 @@ module.exports = async (app) => {
   }
 
   logger.init('[Redis] 正在初始化...');
-  const clients = await redisCreate(app);
+  const clients = await RedisCreate(app);
   for (const name in clients) { await clients[name].connect(); }
   app.redis = new RedisManager(clients);
   app._redisClients = clients;
