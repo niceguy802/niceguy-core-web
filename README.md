@@ -8,12 +8,13 @@ npm run build
 ### 测试
 npm test
 
-### 只升版本号（不发布）
-npm run version:patch    # 0.1.0 → 0.1.1
-npm run version:minor    # 0.1.0 → 0.2.0
-npm run version:major    # 0.1.0 → 1.0.0
+## 插件 packages
 
-### 🚀 一条龙：测试 → 构建 → 升版本 → 打 tag → 推 git → 发布 npm
-npm run release:patch    # 小改
-npm run release:minor    # 加功能
-npm run release:major    # 不兼容改
+### http-client
+http请求认证
+
+### egg-core-client
+egg framework 
+prisma封装自动注册，redis自动注册
+日志系统
+jwt认证，token自动续期....
