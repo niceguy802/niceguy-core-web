@@ -3,10 +3,6 @@
   "version": "1.0.0",
   "description": "vue core",
   "private": true,
-  "workspaces": [
-    "packages/*",
-    "playground"
-  ],
   "scripts": {
     "test": "npm test -w packages/http-client",
     "build": "npm run build -w packages/http-client",

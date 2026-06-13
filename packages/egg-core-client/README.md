@@ -86,12 +86,11 @@ egg-core-client/
 ├── index.js                 # 导出 lib/framework.js
 ├── lib/
 │   ├── framework.js         # Egg Application/Agent 子类实现
+│   ├── prisma               # 数据库 - Prisma 多库管理
+│   ├── redis                # Redis 客户端管理
 │   └── loader/              # 自定义加载器
 ├── app/
-│   ├── core/                # 核心能力模块
-│   │   ├── prisma/          # 数据库 - Prisma 多库管理
-│   │   ├── database/        # （旧版）数据库初始化
-│   │   └── redis/           # Redis 客户端管理
+│   │   
 │   ├── extend/              # 框架扩展
 │   │   ├── context.js       # ctx.api, ctx.payload, ctx.encrypt
 │   │   └── application.js   # app 扩展
@@ -176,6 +175,8 @@ module.exports = {
 ```
 
 #### 自动注册（推荐）
+
+自行管理配置文件prisma.config.ts、prisma.schema.ts，以及自行管理生成generated文件；
 
 框架自动从 `app.config.Dbs` 读取配置，加载 `prisma/generated/{name}` 模块，创建并注册 PrismaClient：
 
